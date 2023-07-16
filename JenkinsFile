@@ -1,0 +1,71 @@
+properties(
+	[
+		parameters([
+			string(
+				defaultValue: 'JenkinsNodeName', 
+				name: "JenkinsNode",
+				trim: true
+			),
+			string(
+				defaultValue: 'https://<<domain_name>>/<<git_locaton>>.git', 
+				name: 'GitUrl', 
+				trim: true
+			),
+			string(
+				defaultValue: '*/master', 
+				name: 'BranchName', 
+				trim: true
+			),
+			string(
+				defaultValue: 'efb7ccee-888a-4b2a-831d-122ec31e17c0', 
+				name: 'GitUserCredentails', 
+				trim: true
+			),
+			string(
+				defaultValue: 'http://localhost:9000', 
+				name: 'SonarHostUrl', 
+				trim: true
+			),
+			string(
+				defaultValue: 'SonarQubeProjectName', 
+				name: 'SonarProjectKeyName', 
+				trim: true
+			)
+		])
+	]
+)
+
+def sonarScannerLocation = 'C:\\sonarqube-9.9.0.65466\\sonar-scanner-msbuild-5.9.1.58166-net46\\SonarScanner.MSBuild.exe'
+def solutionLocation = 'SolutionName.sln' 
+
+pipeline {
+	agent {label params.JenkinsNode}
+	
+	options {
+		timeout(time: 60)
+		disableConcurrentBuilds()
+	}
+	
+	stages {
+	
+		stage('Get Latest Code'){
+			steps{
+			    echo 'Checking out'
+				checkout([$class: 'GitSCM', branches: [[name: params.BranchName]], doGenerateSubmoduleConfigurations: false, extensions: [[$class: 'CloneOption', timeout: 40]], gitTool: 'Default', submoduleCfg: [], userRemoteConfigs: [[credentialsId: params.GitUserCredentails, url: params.GitUrl]]])
+			}
+		}
+	
+		stage('SonarQube Analysis') {
+			steps {
+				echo 'SonarQube Scanner Started'
+				bat ("\"" + sonarScannerLocation + "\" begin /k:\"" + params.SonarProjectKeyName +  "\" /d:sonar.host.url=\"" + params.SonarHostUrl + "\"")
+				
+				echo 'Building project started'
+				bat ("\"${tool 'msbuild'}\" \"" + solutionLocation + "\" /t:Build")
+				
+				echo 'SonarQube Scanner Stopping and uploding scan result'
+				bat ("\"" + sonarScannerLocation + "\" end ")
+			}
+		}
+	}
+}
